@@ -86,6 +86,43 @@ sudo apt install -y build-essential git python3-pip python3-venv
 pip3 install numpy opencv-python tensorflow-lite
 ```
 
+### Qwen-Code Installation
+
+To install and configure qwen-code on your Orange Pi AI Pro:
+
+```bash
+# 1. Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+
+# Or use domestic mirror:
+curl -o- https://gitee.com/mirrors/nvm/raw/master/install.sh | bash
+
+# 2. Reload bash configuration
+source ~/.bashrc
+
+# 3. Verify nvm installation
+nvm --version
+
+# 4. Upgrade Node.js to version 20+
+nvm install 20
+nvm use 20
+
+# 5. Configure npm to use user directory
+mkdir -p ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# 6. Configure npm to use domestic mirror
+npm config set registry https://registry.npmmirror.com
+
+# 7. Install qwen-code
+npm install -g @qwen-code/qwen-code
+
+# 8. Verify installation
+qwen-code --version
+```
+
 ## User Experience
 
 ### Desktop Environment
