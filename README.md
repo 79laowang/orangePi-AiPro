@@ -120,7 +120,7 @@ npm config set registry https://registry.npmmirror.com
 npm install -g @qwen-code/qwen-code
 
 # 8. Verify installation
-qwen-code --version
+qwen
 ```
 
 ## User Experience
