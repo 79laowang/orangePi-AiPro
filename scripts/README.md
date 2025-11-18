@@ -23,6 +23,7 @@ Ubuntu对系统的适配不是太好，获得不了CPU的温度。
 ---
 
 ## Image Etcher Script (`img-etcher-Pi.sh`)
+厂家提供的烧录工具很不好用，安装也麻烦，只好叫Claude写个脚本来烧录Image。Fedora 40上给我的Orange Pi写系统，工作的很好。
 
 A safe CLI tool for writing Raspberry Pi/Orange Pi images to SD cards and USB drives. Enhanced with comprehensive safety features, multiple write modes, and automatic dependency management.
 
