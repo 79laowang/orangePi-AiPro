@@ -39,9 +39,9 @@ This repository contains documentation, configuration guides, and examples to he
    ```bash
    # Download the latest OS image
    # Flash to microSD card using tools like:
-   # - balenaEtcher
+   # - https://github.com/79laowang/orangePi-AiPro/blob/main/scripts/img-etcher-Pi.sh
    # - dd command
-   # - Raspberry Pi Imager
+   # - opiaipro_ubuntu22.04_desktop_aarch64_20250925.img.xz
    ```
 
 3. **First Boot Configuration**
