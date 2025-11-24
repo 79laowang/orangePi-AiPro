@@ -29,7 +29,7 @@ This repository contains documentation, configuration guides, and examples to he
 ### Initial Setup
 
 1. **Hardware Requirements**
-   - Orange Pi AI Pro board
+   - Orange Pi AI Pro board with Huawei HiSilicon Ascend 310B AI processor
    - MicroSD card (32GB+ recommended)
    - Power supply (5V/3A recommended)
    - USB-C cable
@@ -44,34 +44,9 @@ This repository contains documentation, configuration guides, and examples to he
    # - opiaipro_ubuntu22.04_desktop_aarch64_20250925.img.xz
    ```
 
-3. **First Boot Configuration**
-   - Connect via serial console or SSH
-   - Set up user account and password
-   - Configure network settings
+3. **System Configuration**
    - Update system packages
-
-### System Optimization
-
-#### Enable GPU Acceleration
-```bash
-# Configure GPU settings in device tree
-# Enable hardware acceleration for AI workloads
-```
-
-#### Memory and Storage
-```bash
-# Expand filesystem to use full SD card
-sudo resize2fs /dev/mmcblk0p2
-
-# Configure swap space if needed
-sudo swapon --show
-```
-
-#### Network Configuration
-```bash
-# Static IP configuration (if needed)
-sudo nano /etc/netplan/01-netcfg.yaml
-```
+   - Configure development environment
 
 ### Development Environment Setup
 
@@ -84,6 +59,54 @@ sudo apt install -y build-essential git python3-pip python3-venv
 
 # Install AI/ML libraries
 pip3 install numpy opencv-python tensorflow-lite
+```
+
+### CANN (Compute Architecture for Neural Networks) Setup
+
+The Orange Pi AI Pro features a Huawei HiSilicon Ascend 310B AI processor. Understanding the key components:
+
+- **NPU (Neural Processing Unit)**: 华为的AI加速器，相当于NVIDIA的GPU
+- **CANN (Compute Architecture for Neural Networks)**: 相当于NVIDIA的CUDA，提供驱动层和算子库
+- **ATC (Ascend Tensor Compiler)**: 核心工具，将开源模型转换为昇腾能跑的.om格式
+- **ACL (Ascend Computing Language)**: 底层API，用于调用NPU进行推理
+
+#### Check CANN Installation
+```bash
+# Check NPU status
+npu-smi info
+
+# Expected output should show:
+# - NPU name: 310B4 (Ascend 310B)
+# - CANN version: 25.2.0
+# - Health status
+# - Memory usage
+```
+
+#### Environment Configuration
+CANN environment variables should be automatically configured through `/etc/ascend_install.info` and `set_env.sh`. Verify with:
+
+```bash
+# Check if environment variables are set
+echo $ASCEND_TOOLKIT_HOME
+echo $LD_LIBRARY_PATH
+
+# ATC (Ascend Tensor Compiler) should be available
+which atc
+atc --help
+```
+
+#### Model Conversion with ATC
+ATC (Ascend Tensor Compiler) 是将开源模型(ONNX/Caffe/TensorFlow)转换成昇腾.om格式的核心工具:
+
+```bash
+# Convert TensorFlow model to OM format for Ascend NPU
+atc --model=model.pb --framework=3 --output=model_output --soc_version=Ascend310B3
+
+# Convert ONNX model to OM format
+atc --model=model.onnx --framework=5 --output=model_output --soc_version=Ascend310B3
+
+# Convert with input shape and optimization
+atc --model=model.onnx --framework=5 --input_shape="input:1,3,224,224" --output=model_optimized --soc_version=Ascend310B3 --input_format=NCHW
 ```
 
 ### Qwen-Code Installation
@@ -125,45 +148,17 @@ qwen
 
 ## User Experience
 
-### Desktop Environment
-
-The Orange Pi AI Pro supports various desktop environments:
-- **Xfce**: Lightweight and efficient
-- **GNOME**: Full-featured desktop
-- **KDE**: Modern and customizable
-
-### Remote Access
-
-#### SSH Access
-```bash
-# Enable SSH (if not already enabled)
-sudo systemctl enable ssh
-sudo systemctl start ssh
-
-# Connect from another machine
-ssh username@orange-pi-ip
-```
-
-#### VNC Remote Desktop
-```bash
-# Install VNC server
-sudo apt install -y tightvncserver
-
-# Start VNC server
-vncserver :1
-```
-
 ### Performance Monitoring
 
 ```bash
 # Monitor CPU and memory usage
 htop
 
-# Check GPU usage
-nvidia-smi  # If applicable
+# Check NPU usage
+npu-smi info
 
-# Monitor temperature
-watch -n 1 cat /sys/class/thermal/thermal_zone*/temp
+# Monitor system resources
+iostat -x 1
 ```
 
 ## Learning Resources
@@ -229,6 +224,15 @@ pip3 install tensorflow-lite-runtime
 pip3 install tensorflow
 ```
 
+#### MindSpore (华为AI框架)
+```bash
+# Install MindSpore for Ascend
+pip3 install mindspore-ascend
+
+# Verify installation
+python -c "import mindspore; print(mindspore.__version__)"
+```
+
 #### PyTorch (if supported)
 ```bash
 # Install PyTorch
@@ -250,53 +254,55 @@ python3 -m tensorflow.lite.python.convert \
   --output_file=model.tflite
 ```
 
-### Example: Image Classification
+### AI Development Examples
+
+#### ACL (Ascend Computing Language) API Usage
+ACL是调用NPU进行推理的底层API，提供C++和Python接口:
 
 ```python
-import tensorflow as tf
+import acl
 import numpy as np
-from PIL import Image
 
-# Load TFLite model
-interpreter = tf.lite.Interpreter(model_path="model.tflite")
-interpreter.allocate_tensors()
+# ACL初始化
+acl.init()
+context, ret = acl.rt.create_context(device_id=0)
 
-# Get input and output tensors
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+# 加载OM模型
+model_id, ret = acl.mdl.load_from_file("model.om")
 
-# Load and preprocess image
-image = Image.open("test_image.jpg")
-image = image.resize((224, 224))
-input_data = np.expand_dims(image, axis=0)
+# 创建数据集
+dataset = acl.mdl.create_dataset()
+# 准备输入数据并传输到设备
+input_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
+# ... ACL数据处理流程
 
-# Run inference
-interpreter.set_tensor(input_details[0]['index'], input_data)
-interpreter.invoke()
+# 执行推理
+ret = acl.mdl.execute(model_id, dataset, dataset)
 
-# Get results
-output_data = interpreter.get_tensor(output_details[0]['index'])
-predictions = output_data[0]
+# 清理资源
+acl.mdl.unload(model_id)
+acl.rt.destroy_context(context)
+acl.finalize()
 ```
 
-### Example: Object Detection
-
+#### Computer Vision with Ascend NPU
 ```python
 import cv2
 import numpy as np
 
-# Load model and labels
-# Initialize camera or load image
+# 使用ACL API进行NPU推理的完整流程
+# 结合OpenCV进行图像预处理和结果可视化
 cap = cv2.VideoCapture(0)
 
 while True:
     ret, frame = cap.read()
-    # Preprocess frame
-    # Run inference
-    # Draw bounding boxes
-    cv2.imshow('Object Detection', frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    if ret:
+        # 预处理图像数据
+        # 通过ACL调用NPU进行推理
+        # 后处理并显示结果
+        cv2.imshow('Ascend NPU Inference', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
 cap.release()
 cv2.destroyAllWindows()
