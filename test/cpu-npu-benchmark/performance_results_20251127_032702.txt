@@ -1,0 +1,12 @@
+AI Performance Test Results
+============================================================
+Timestamp: 2025-11-27T03:27:02.908370
+System: Orange Pi AI Pro with Ascend NPU
+
+CPU Results:
+  mean: 1221.9281360000082
+  std: 30.119868932208675
+  min: 1151.0590549999051
+  max: 1324.2001999999502
+  throughput: 0.8183787331990802
+  memory_used: 10.01171875
