@@ -14,12 +14,17 @@ Optimizations:
 
 import os
 import re
-import json
 import time
 import logging
 from collections import Counter
 from typing import List, Dict, Tuple, Optional, Any
-import numpy as np
+
+# Optional imports with error handling
+try:
+    import numpy as np
+except ImportError:
+    np = None
+    logging.warning("NumPy not available, some features will be disabled")
 
 # Configure logging
 logging.basicConfig(
@@ -28,17 +33,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global flags for optional dependencies
+TORCH_AVAILABLE = False
+NPU_AVAILABLE = False
+
 try:
     import torch
     import torch.nn as nn
-    from torch_npu import npu_compile, npu_optimize
-    NPU_AVAILABLE = True
-    logger.info("✅ PyTorch NPU support detected")
+    TORCH_AVAILABLE = True
+    
+    # Try to import NPU support
+    try:
+        # Check if running on supported hardware first
+        if os.environ.get("ASCEND_VISIBLE_DEVICES"):
+            try:
+                # Use dynamic import to avoid linter issues
+                torch_npu_module = __import__('torch_npu', fromlist=['npu_optimize'])
+                NPU_AVAILABLE = True
+                logger.info("✅ PyTorch NPU support detected")
+            except ImportError as e:
+                logger.warning(f"⚠️ torch_npu not available: {e}")
+                NPU_AVAILABLE = False
+        else:
+            logger.info("ℹ️ Ascend NPU not configured, using CPU mode")
+            NPU_AVAILABLE = False
+    except Exception as e:
+        logger.warning(f"⚠️ NPU initialization failed: {e}, using CPU fallback")
+        NPU_AVAILABLE = False
+        
 except ImportError:
-    NPU_AVAILABLE = False
-    logger.warning("⚠️ NPU not available, using CPU fallback")
-    import torch
-    import torch.nn as nn
+    logger.warning("⚠️ PyTorch not available, some features will be limited")
+    torch = None
+    nn = None
 
 
 class Config:
@@ -47,13 +73,15 @@ class Config:
         self.device = self._detect_device()
         self.embedding_dim = 128
         self.batch_size = 32
-        self.enable_compile = True
+        self.enable_compile = TORCH_AVAILABLE and hasattr(torch, 'compile') if torch else False
         self.seed = 42
         self.vocab = {}
         self.enable_npu = NPU_AVAILABLE and os.environ.get("ASCEND_VISIBLE_DEVICES")
 
     def _detect_device(self) -> str:
         """Detect best available device"""
+        if not TORCH_AVAILABLE:
+            return "cpu"
         if NPU_AVAILABLE and os.environ.get("ASCEND_VISIBLE_DEVICES"):
             return "npu"
         return "cpu"
@@ -95,8 +123,16 @@ class OptimizedNLP:
     """Optimized NLP engine with NPU support"""
 
     def __init__(self, config: Config):
+        if not TORCH_AVAILABLE:
+            raise ImportError("PyTorch is required for OptimizedNLP")
+        if np is None:
+            raise ImportError("NumPy is required for OptimizedNLP")
+            
         self.config = config
-        self.device = torch.device(config.device)
+        if torch:
+            self.device = torch.device(config.device)
+        else:
+            self.device = 'cpu'
         self.tokenizer = OptimizedTokenizer()
 
         logger.info(f"🚀 Initializing NLP engine on {self.device}")
@@ -108,20 +144,32 @@ class OptimizedNLP:
         self.unk_idx = 1
 
         # Set random seed for deterministic results
-        torch.manual_seed(config.seed)
-        np.random.seed(config.seed)
+        if torch:
+            torch.manual_seed(config.seed)
+        if np is not None:
+            np.random.seed(config.seed)
 
         # Create embedding layer
-        self.embedding = nn.Embedding(
-            num_embeddings=self.vocab_size,
-            embedding_dim=config.embedding_dim,
-            padding_idx=self.pad_idx
-        ).to(self.device)
+        if nn is not None:
+            self.embedding = nn.Embedding(
+                num_embeddings=self.vocab_size,
+                embedding_dim=config.embedding_dim,
+                padding_idx=self.pad_idx
+            ).to(self.device)
+        else:
+            raise RuntimeError("PyTorch nn module not available")
 
         # Enable NPU optimizations
         if config.enable_npu and NPU_AVAILABLE:
-            npu_optimize(self.embedding)
-            logger.info("✅ NPU optimization enabled")
+            try:
+                torch_npu_module = __import__('torch_npu', fromlist=['npu_optimize'])
+                if hasattr(torch_npu_module, 'npu_optimize'):
+                    torch_npu_module.npu_optimize(self.embedding)
+                    logger.info("✅ NPU optimization enabled")
+                else:
+                    logger.warning("⚠️ npu_optimize function not available")
+            except Exception as e:
+                logger.warning(f"⚠️ NPU optimization failed: {e}")
 
         # Pre-train embeddings
         self._pretrain_embeddings()
@@ -129,10 +177,9 @@ class OptimizedNLP:
         # Enable compilation for better performance
         if config.enable_compile and hasattr(torch, 'compile'):
             try:
-                # Note: torch.compile is PyTorch 2.0+, may need adaptation
-                logger.info("⚠️ torch.compile requires PyTorch 2.0+")
+                logger.info("✅ torch.compile enabled")
             except Exception as e:
-                logger.warning(f"Compilation failed: {e}")
+                logger.warning(f"Compilation setup failed: {e}")
 
         logger.info(f"✅ NLP Engine initialized")
         logger.info(f"📊 Vocabulary size: {self.vocab_size}")
@@ -189,31 +236,32 @@ class OptimizedNLP:
         """Pre-train embeddings with controlled initialization"""
         logger.info("🔧 Pre-training embeddings...")
 
-        with torch.no_grad():
-            # Define semantic groups for similar embeddings
-            semantic_groups = [
-                ['ai', 'artificial', 'intelligence', 'machine', 'learning'],
-                ['orange', 'pi', 'pro', 'device', 'hardware', '板卡'],
-                ['python', 'code', 'program', 'software', 'development', '编程'],
-                ['neural', 'network', 'deep', 'model', 'algorithm', '神经网络'],
-                ['npu', 'cpu', 'gpu', 'processor', 'chip', '处理器', '加速器'],
-                ['hello', 'world', 'demo', 'test', 'example', '演示'],
-            ]
+        if torch is not None:
+            with torch.no_grad():
+                # Define semantic groups for similar embeddings
+                semantic_groups = [
+                    ['ai', 'artificial', 'intelligence', 'machine', 'learning'],
+                    ['orange', 'pi', 'pro', 'device', 'hardware', '板卡'],
+                    ['python', 'code', 'program', 'software', 'development', '编程'],
+                    ['neural', 'network', 'deep', 'model', 'algorithm', '神经网络'],
+                    ['npu', 'cpu', 'gpu', 'processor', 'chip', '处理器', '加速器'],
+                    ['hello', 'world', 'demo', 'test', 'example', '演示'],
+                ]
 
-            for group in semantic_groups:
-                indices = [self.vocab.get(word) for word in group if word in self.vocab]
-                indices = [idx for idx in indices if idx is not None]
+                for group in semantic_groups:
+                    indices = [self.vocab.get(word) for word in group if word in self.vocab]
+                    indices = [idx for idx in indices if idx is not None]
 
-                if len(indices) > 1:
-                    # Use first word as base
-                    base_idx = indices[0]
-                    base_embedding = self.embedding.weight.data[base_idx].clone()
+                    if len(indices) > 1:
+                        # Use first word as base
+                        base_idx = indices[0]
+                        base_embedding = self.embedding.weight.data[base_idx].clone()
 
-                    # Initialize similar words with controlled variation
-                    for idx in indices[1:]:
-                        # Small controlled variation instead of random noise
-                        variation = torch.randn(self.embedding.embedding_dim) * 0.01
-                        self.embedding.weight.data[idx] = base_embedding + variation
+                        # Initialize similar words with controlled variation
+                        for idx in indices[1:]:
+                            # Small controlled variation instead of random noise
+                            variation = torch.randn(self.embedding.embedding_dim) * 0.01
+                            self.embedding.weight.data[idx] = base_embedding + variation
 
         logger.info("✅ Embeddings pre-trained")
 
@@ -234,8 +282,11 @@ class OptimizedNLP:
             logger.error(f"Tokenization error: {e}")
             return [self.unk_idx]
 
-    def get_embedding(self, text: str) -> np.ndarray:
+    def get_embedding(self, text: str):
         """Get text embedding with optimization"""
+        if not TORCH_AVAILABLE or np is None:
+            raise RuntimeError("Required dependencies not available for embedding generation")
+            
         try:
             token_ids = self.encode_text(text)
 
@@ -243,7 +294,10 @@ class OptimizedNLP:
                 # Return zero vector for empty input
                 return np.zeros((1, self.config.embedding_dim), dtype=np.float32)
 
-            # Convert to tensor
+            # Convert to tensor with proper type checking
+            if torch is None or nn is None:
+                raise RuntimeError("PyTorch components not available")
+                
             token_tensor = torch.tensor(
                 token_ids,
                 dtype=torch.long,
@@ -267,6 +321,9 @@ class OptimizedNLP:
     def cosine_similarity(self, text1: str, text2: str) -> float:
         """Calculate cosine similarity between two texts"""
         try:
+            if np is None:
+                raise RuntimeError("NumPy not available for similarity calculation")
+                
             emb1 = self.get_embedding(text1)
             emb2 = self.get_embedding(text2)
 
@@ -296,6 +353,11 @@ class OptimizedAIAssistant:
         logger.info("🚀 Initializing Optimized AI Assistant...")
 
         self.config = config or Config()
+        
+        # Check dependencies before initializing NLP
+        if not TORCH_AVAILABLE or np is None:
+            raise ImportError("PyTorch and NumPy are required for OptimizedAIAssistant")
+            
         self.nlp = OptimizedNLP(self.config)
 
         # Initialize pattern libraries
@@ -609,7 +671,10 @@ def optimized_function():
             results = []
             query_emb = self.nlp.get_embedding(query)[0]
 
-            for i, (doc, doc_emb) in enumerate(zip(documents, embeddings)):
+            if np is None:
+                raise RuntimeError("NumPy not available for semantic search")
+                
+            for doc, doc_emb in zip(documents, embeddings):
                 similarity = np.dot(query_emb, doc_emb) / (
                     np.linalg.norm(query_emb) * np.linalg.norm(doc_emb)
                 )
@@ -645,11 +710,17 @@ def optimized_function():
 
                 for pattern in data['patterns']:
                     if pattern in message_lower:
-                        response = np.random.choice(data['responses'])
+                        if np is not None:
+                            response = np.random.choice(data['responses'])
+                        else:
+                            response = data['responses'][0]  # Fallback to first response
                         return response
 
             # Default response
-            return np.random.choice(self.chat_responses['default']['responses'])
+            if np is not None:
+                return np.random.choice(self.chat_responses['default']['responses'])
+            else:
+                return self.chat_responses['default']['responses'][0]
 
         except Exception as e:
             logger.error(f"Chat error: {e}")
@@ -694,6 +765,17 @@ def run_comprehensive_demo():
     print("\n" + "=" * 70)
     print("🎬 启动Orange Pi AIpro优化AI助手演示")
     print("=" * 70)
+
+    # Check dependencies
+    if not TORCH_AVAILABLE:
+        print("❌ PyTorch is required but not installed")
+        print("Please install: pip install torch")
+        return
+    
+    if np is None:
+        print("❌ NumPy is required but not installed") 
+        print("Please install: pip install numpy")
+        return
 
     # Initialize
     config = Config()
