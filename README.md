@@ -46,6 +46,122 @@ This repository contains documentation, configuration guides, and examples to he
    - Update system packages
    - Configure development environment
 
+## 使用场景
+
+### ✅ 可以做的场景
+
+#### 1. CPU 模式大模型推理
+
+**适用模型**:
+- Qwen2-1.5B / Qwen2-0.5B (中文对话/创作)
+- Llama-3.2-1B / 3B (英文对话)
+- 其他 1-3B 参数量的语言模型
+
+**使用方式**:
+```bash
+# 方式一: MindSpore CPU 模式
+import mindspore
+mindspore.set_context(device_target="CPU", mode=mindspore.PYNATIVE_MODE)
+
+# 方式二: transformers + PyTorch (推荐)
+pip install transformers torch sentencepiece
+python3 infer_qwen_cpu.py
+```
+
+**典型应用**:
+- 中文小说创作 (武侠、仙侠、都市)
+- 智能对话助手
+- 文本摘要/翻译
+- 代码生成/补全
+
+---
+
+#### 2. NPU 模式小模型推理
+
+**适用模型** (单个模型文件 < 1GB):
+- ResNet-50/101 (图像分类)
+- YOLOv5/v8 (目标检测)
+- MobileNet (轻量级图像分类)
+- BERT-Base (NLP 分类任务)
+
+**使用方式**:
+```python
+import mindspore
+mindspore.set_context(device_target="Ascend")
+
+# 加载小模型进行推理
+from mindspore import Tensor
+import numpy as np
+
+# 示例: 图像分类
+input_tensor = Tensor(np.random.rand(1, 3, 224, 224).astype(np.float32))
+output = model(input_tensor)
+```
+
+**典型应用**:
+- 人脸识别
+- 车牌识别
+- 工业质检
+- 智能监控
+
+---
+
+#### 3. 边缘计算场景
+
+**特点**: 低功耗、实时响应、离线运行
+
+**应用场景**:
+- 智能家居控制
+- 机器人视觉导航
+- 无人机图像处理
+- 智能安防系统
+
+**优势**:
+- 功耗 < 20W
+- 无需联网
+- 数据隐私保护
+
+---
+### ❌ 不能做的场景
+
+#### 1. NPU 模式大模型推理
+
+**原因**: 内存限制 (15GB RAM < 8-10GB NPU 共享内存需求)
+
+**不支持的模型**:
+- Qwen2-7B 及以上
+- Llama-3-8B 及以上
+- 任何需要 > 3GB 内存的大模型
+
+**错误表现**:
+```
+Killed (Exit Code 137)
+dmesg: Memory cgroup out of memory: shmem-rss: 10354468kB
+```
+
+**替代方案**: 使用 CPU 模式
+
+---
+
+#### 2. NPU 模式模型训练
+
+**原因**:
+- Ascend 310B 是推理专用芯片
+- 缺少训练所需的高精度计算单元
+- 内存不足以存储梯度/优化器状态
+
+**不支持的操作**:
+- 微调 (Fine-tuning)
+- LoRA 训练
+- 全量训练
+
+**替代方案**:
+- 在云端/高性能服务器训练
+- 下载预训练模型直接推理
+
+---
+
+
 ### Development Environment Setup
 
 ```bash
