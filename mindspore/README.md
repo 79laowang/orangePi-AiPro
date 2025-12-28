@@ -13,11 +13,6 @@ mindspore/
 │   ├── patch_op_tiling.py            # CANN 7.1.0 兼容性补丁工具
 │   ├── op_tiling_patched.py          # 修复后的 op_tiling.py
 │   └── fix_cann_env.sh               # 环境变量修复脚本
-├── inference/      # 推理脚本
-│   ├── infer_qwen_cpu.py             # CPU 模式 Qwen2 推理
-│   ├── infer_qwen_lite.py            # 轻量级 Qwen2 推理
-│   ├── novel_inference_cpu.py        # CPU 推理方案说明
-│   └── convert_qwen_to_mindspore.py  # Qwen2 转 MindSpore 格式
 └── tools/          # 工具
     └── download_qwen_model.py        # Qwen2 模型下载工具
 ```
@@ -40,8 +35,9 @@ chmod +x setup_mindspore.sh
 
 ### 3. 运行 CPU 推理（推荐）
 
+参考项目根目录下的推理脚本：
 ```bash
-cd ../inference
+cd /home/HwHiAiUser/ai-works/orangePi-AiPro
 pip install transformers torch sentencepiece
 python3 infer_qwen_cpu.py
 ```
