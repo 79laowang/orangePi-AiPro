@@ -1,0 +1,17 @@
+# Qwen2.5-3B-Instruct ONNX Export Requirements
+# ==================================================
+
+# Core dependencies
+torch>=2.0.0
+transformers>=4.37.0
+onnx>=1.15.0
+onnxruntime>=1.16.0
+
+# Optional: for model optimization (use actual package name onnxsim)
+onnxsim>=0.4.0
+
+# NumPy
+numpy>=1.24.0
+
+# Progress bars
+tqdm>=4.65.0
