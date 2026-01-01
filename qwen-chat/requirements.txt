@@ -1,0 +1,32 @@
+# Qwen Chatbot Requirements
+# Based on orange-pi-mindspore reference implementation
+# Compatible with CANN 8.1.RC1 + MindSpore 2.6.0 + mindnlp 0.4.1
+
+# ---------------------------- Prerequisites ----------------------------
+# Before installing Python packages, ensure:
+# 1. CANN 8.1.RC1 is installed at /usr/local/Ascend/ascend-toolkit/8.1.RC1
+# 2. Run: source /usr/local/Ascend/ascend-toolkit/set_env.sh
+
+# ---------------------------- Core Dependencies -------------------------
+# MindSpore AI framework (NPU support)
+mindspore==2.6.0
+
+# MindNLP for transformers and NLP models
+mindnlp==0.4.1
+
+# ---------------------------- Web Interface ----------------------------
+# Gradio for web UI
+gradio>=6.0.0
+
+# ---------------------------- Optional (Development) ------------------
+# Jupyter notebook for development and testing
+jupyter
+
+# ---------------------------- Installation ----------------------------
+# Install all dependencies:
+#   pip install -r requirements.txt
+#
+# Run the chatbot:
+#   source /usr/local/Ascend/ascend-toolkit/set_env.sh
+#   python3 app.py           # Basic version
+#   python3 app_jit.py       # JIT-optimized version
