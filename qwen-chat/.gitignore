@@ -1,0 +1,35 @@
+# Model files and caches
+.mindnlp/
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# MindSpore runtime artifacts
+kernel_meta/
+offload/
+
+# Claude Code workspace
+.claude/
+
+# Hugging Face cache
+.huggingface/
+models/
+
+# Python virtual environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
