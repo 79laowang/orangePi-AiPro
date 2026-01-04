@@ -1,6 +1,7 @@
 import gradio as gr
 import mindspore
 from mindspore import context
+import mindspore.ops as ops
 import time
 import os
 from mindnlp.transformers import AutoModelForCausalLM, AutoTokenizer
@@ -8,8 +9,15 @@ from mindnlp.transformers import TextIteratorStreamer
 from threading import Thread
 
 # Configure MindSpore context for NPU acceleration
-# PYNATIVE_MODE (1) is better for LLM streaming inference
-context.set_context(mode=context.PYNATIVE_MODE, device_target="Ascend")
+# Try using new API first, fall back to old API
+try:
+    mindspore.set_device("Ascend", 0)  # New API
+    device_set = "new API (set_device)"
+except:
+    context.set_context(mode=context.PYNATIVE_MODE, device_target="Ascend")
+    device_set = "old API (device_target)"
+
+context.set_context(mode=context.PYNATIVE_MODE)
 
 # Enable performance optimizations
 os.environ['MS_ENABLE_GE'] = '1'  # Enable Graph Engine
@@ -19,11 +27,27 @@ os.environ['MS_ENABLE_MC'] = '1'  # Enable memory compression
 os.environ['MS_LLM_ENABLED'] = '1'  # Enable LLM optimizations
 
 print(f"MindSpore Context - Mode: {context.get_context('mode')} (0=GRAPH, 1=PYNATIVE)")
-print(f"MindSpore Context - Device: {context.get_context('device_target')}")
+print(f"MindSpore Context - Device: {device_set}")
 
 # Loading the tokenizer and model from Hugging Face's model hub.
+# Disable sliding window attention as it's not implemented in eager mode
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen1.5-0.5B-Chat", ms_dtype=mindspore.float16)
-model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen1.5-0.5B-Chat", ms_dtype=mindspore.float16)
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen1.5-0.5B-Chat",
+    ms_dtype=mindspore.float16,
+)
+
+# Disable sliding window attention by modifying model config
+if hasattr(model.config, 'use_sliding_window'):
+    model.config.use_sliding_window = False
+if hasattr(model.config, 'sliding_window'):
+    model.config.sliding_window = None
+# Also disable attention related configs that may cause issues
+if hasattr(model.config, 'attention_dropout'):
+    model.config.attention_dropout = 0.0
+
+print(f"Model config - use_sliding_window: {getattr(model.config, 'use_sliding_window', 'N/A')}")
+print(f"Model config - sliding_window: {getattr(model.config, 'sliding_window', 'N/A')}")
 
 system_prompt = "You are a helpful and friendly chatbot"
 
@@ -56,14 +80,20 @@ def predict(message, history):
                 return_tensors="ms",
                 tokenize=True
                )
+
+    # Create attention mask (all 1s for non-padding tokens)
+    attention_mask = ops.ones_like(input_ids)
+
     streamer = TextIteratorStreamer(tokenizer, timeout=300, skip_prompt=True, skip_special_tokens=True)
     generate_kwargs = dict(
             input_ids=input_ids,
+            attention_mask=attention_mask,  # Add attention mask to avoid warning
             streamer=streamer,
-            max_new_tokens=512,  # Reduced from 1024
+            max_new_tokens=512,
             do_sample=False,  # Use greedy decoding for faster inference
-            top_p=0.9,
-            temperature=0.1,
+            top_k=None,  # Disable top_k
+            top_p=None,  # Disable top_p to avoid warning
+            temperature=None,  # Disable temperature
             num_beams=1,
             )
     t = Thread(target=model.generate, kwargs=generate_kwargs)
