@@ -129,6 +129,8 @@ qwen-chat/
 
 ## 预期性能
 
+**详细性能分析请参阅 [PERFORMANCE.md](PERFORMANCE.md)**
+
 ### 实测性能 (Orange Pi AI Pro + Ascend 310B4)
 
 | 指标 | 性能 |
