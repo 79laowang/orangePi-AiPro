@@ -60,8 +60,10 @@ def predict(message, history):
 
 
 # Setting up the Gradio chat interface.
-gr.ChatInterface(predict,
-                 title="Qwen1.5-0.5b-Chat",
-                 description="问几个问题",
-                 examples=['你是谁？', '介绍一下Redhat公司']
-                 ).launch()  # Launching the web interface.
+# Use server_name="0.0.0.0" to allow remote access from other devices on the network
+iface = gr.ChatInterface(predict,
+                         title="Qwen1.5-0.5b-Chat",
+                         description="问几个问题",
+                         examples=['你是谁？', '介绍一下Redhat公司']
+                         )
+iface.launch(server_name="0.0.0.0", server_port=7860)  # Launching the web interface.
