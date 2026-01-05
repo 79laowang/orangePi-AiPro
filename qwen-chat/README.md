@@ -157,10 +157,12 @@ qwen-chat/
 
 ### 优化建议
 
+**vLLM-Ascend 不支持**: 由于驱动限制，vLLM-Ascend 不支持 Ascend 310B，此方案不可行。
+
 如需更高性能，可考虑：
-1. 使用 **vLLM-Ascend** 专用推理引擎
-2. 使用 **MindIE** (华为官方推理引擎)
-3. 使用量化模型 (INT8/INT4)
+1. 使用 **MindIE** (华为官方推理引擎，需要确认 310B 支持情况)
+2. 使用量化模型 (INT8/INT4)
+3. 升级到支持 Atlas A2/A3 系列的硬件
 
 ## 常见问题
 
@@ -194,15 +196,42 @@ echo $PYTHONPATH
 
 ## 技术探索记录
 
-### JIT 优化尝试
+### 尝试过的优化方案
 
-本项目最初尝试使用 MindSpore JIT 优化来提升推理性能，但遇到了以下问题：
+#### 1. JIT 优化 ❌
 
-1. **Repetition Penalty Bug**: mindnlp 0.4.1 的 `RepetitionPenaltyLogitsProcessor` 在 JIT 模式下存在 Int32/Int64 类型不匹配问题
-2. **StaticCache 不兼容**: `model.jit()` + `StaticCache` 与 Qwen1.5-0.5B-Chat 模型的 attention 机制不兼容
-3. **参考实现验证**: 经查阅 [orange-pi-mindspore](https://github.com/mindspore-lab/orange-pi-mindspore) 参考项目，其 Qwen1.5-0.5B 示例同样不使用 JIT 优化
+尝试使用 MindSpore JIT 优化来提升推理性能：
 
-**结论**: 对于 Qwen1.5-0.5B-Chat 模型，使用标准的 `model.generate()` 方法是当前最稳定的方案。JIT 优化在 DeepSeek-R1-Distill-Qwen-1.5B 等其他模型上可能有更好的支持。
+| 问题 | 描述 |
+|------|------|
+| Repetition Penalty Bug | mindnlp 0.4.1 的 `RepetitionPenaltyLogitsProcessor` 在 JIT 模式下存在 Int32/Int64 类型不匹配 |
+| StaticCache 不兼容 | `model.jit()` + `StaticCache` 与 Qwen1.5-0.5B-Chat 的 attention 机制不兼容 |
+| 参考实现验证 | [orange-pi-mindspore](https://github.com/mindspore-lab/orange-pi-mindspore) 的 Qwen1.5-0.5B 示例同样不使用 JIT |
+
+**结论**: JIT 优化与 Qwen1.5-0.5B-Chat 不兼容，放弃此方案。
+
+#### 2. vLLM-Ascend ❌
+
+尝试使用 vLLM-Ascend 高性能推理引擎：
+
+| 问题 | 描述 |
+|------|------|
+| **驱动不支持** | vLLM-Ascend 不支持 Ascend 310B (Orange Pi AI Pro 的 NPU) |
+| **硬件限制** | vLLM-Ascend 官方仅支持 Atlas A2/A3 系列，不包括 310B |
+| **驱动版本** | 需要 CANN 8.0.RC3 以上，但 310B 驱动有兼容性问题 |
+
+**结论**: vLLM-Ascend 在 Orange Pi AI Pro (Ascend 310B) 上不可行，**此方案已废弃**。
+
+#### 3. MindSpore + mindnlp ✅ (当前方案)
+
+使用标准的 `model.generate()` 方法，经过优化后可稳定运行。
+
+**优化点**:
+- PyNative 模式 (非图模式)
+- Greedy decoding (do_sample=False)
+- 添加 attention_mask
+- 限制对话历史为最近 3 轮
+- 禁用 sliding_window_attention
 
 ### 遇到的错误及解决方案
 
